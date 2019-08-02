@@ -1,0 +1,64 @@
+'''
+爬取西刺代理免费的IP，验证其中有效的IP地址
+'''
+
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+import numpy as np
+import time
+
+
+class IpLogin():
+    def __init__(self):
+        self.headers = {
+            'User-Agent' : "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36",
+        }
+
+    def free_ip(self) -> pd.core.frame.DataFrame:
+        ip_url = "https://www.xicidaili.com/?_id=015448211445"  # 以西刺代理为例
+        r = requests.get(ip_url, headers=self.headers)
+        r.encoding = r.apparent_encoding
+
+        index = pd.Index(['IP', 'Port', 'Location', 'Anonymity', 'IPtype'])
+        df = pd.DataFrame(columns=index)
+
+        soup = BeautifulSoup(r.text, "html5lib")
+        odd_row = soup.select('.odd')
+        for odd in odd_row:
+            even = odd.find_next_sibling("tr")
+            odd_data = [i.get_text() for i in odd.select('td')[1:6]]
+            even_data = [i.get_text() for i in even.select('td')[1:6]]
+            s1 = pd.Series(odd_data, index=index)
+            s2 = pd.Series(even_data, index=index)
+            if s1['Anonymity'] == '高匿' and s1['IPtype'] in ['HTTP', 'HTTPS']:   # 选择高匿且是HTTP/HTTPS类型的IP
+                df = df.append(s1,ignore_index=True)
+            if s2['Anonymity'] == '高匿' and s2['IPtype'] in ['HTTP', 'HTTPS']:
+                df = df.append(s2,ignore_index=True)
+        return df
+
+
+    def try_ip(self):   # 登录百度，检查IP是否能用
+        df = self.free_ip()
+        for i in range(len(df)):
+            row = df.iloc[i]
+            ip = row['IP'] + ':' + row['Port']
+            proxies = {
+                'http':  'http://' + ip ,
+                'https':  'https://' + ip ,
+            }
+            baidu_url = "https://www.baidu.com/"
+            try:
+                r = requests.get(baidu_url,headers=self.headers, proxies=proxies)
+                r.raise_for_status()
+                print("%s -> 成功" %ip)
+            except:
+                print("%s -> 失败" %ip)
+            time.sleep(1)
+
+
+
+if __name__ == '__main__':
+    result = IpLogin().try_ip()
+
+
